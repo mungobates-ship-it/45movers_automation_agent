@@ -27,8 +27,8 @@ export function TaskFilters({
   onStatusChange,
   onRoleChange
 }: TaskFiltersProps) {
-  const selectStyle = {
-    appearance: 'none',
+  const selectStyle: React.CSSProperties = {
+    appearance: 'none' as any,
     width: '100%',
     padding: '8px 12px',
     paddingRight: '32px',
