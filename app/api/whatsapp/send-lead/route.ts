@@ -29,6 +29,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Extract pickup suburb (everything before city/postcode)
+    // Format: "Street, Suburb, City PostCode, Country" -> extract "Street, Suburb"
+    const pickupParts = pickup_address?.split(',') || []
+    const pickupSuburb = pickupParts.slice(0, 2).join(',').trim() // Take first two parts
+
     // Create lead record in Supabase
     const { data: leadData, error: leadError } = await supabase
       .from('leads')
@@ -58,10 +63,10 @@ export async function POST(request: NextRequest) {
 
     const lead = leadData[0]
 
-    // Format WhatsApp message
-    const message = `Hi ${first_name}, Mungo here from 45 Movers. Thanks for submitting an online form. You should soon get an email from us asking to complete your inventory. Please fill this in at your earliest convenience. In the meantime, can I ask if this is the first time using a moving company?`
+    // Format move_date for template (YYYY-MM-DD -> readable format)
+    const moveDate = move_date ? new Date(move_date).toLocaleDateString('en-NZ') : ''
 
-    // Send via WhatsApp API
+    // Send via WhatsApp Template API
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
     const whatsappResponse = await fetch(`https://graph.instagram.com/v18.0/${phoneNumberId}/messages`, {
       method: 'POST',
@@ -71,10 +76,23 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: phone.replace(/\s+/g, ''), // Remove spaces from phone
-        type: 'text',
-        text: {
-          body: message
+        to: phone.replace(/\s+/g, ''),
+        type: 'template',
+        template: {
+          name: '45movers_first_touch_wa',
+          language: {
+            code: 'en'
+          },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: first_name },
+                { type: 'text', text: pickupSuburb },
+                { type: 'text', text: moveDate }
+              ]
+            }
+          ]
         }
       })
     })
@@ -87,7 +105,8 @@ export async function POST(request: NextRequest) {
         statusText: whatsappResponse.statusText,
         data: whatsappData,
         token: process.env.WHATSAPP_ACCESS_TOKEN ? 'SET' : 'MISSING',
-        phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID
+        phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+        templateName: '45movers_first_touch_wa'
       })
       return NextResponse.json(
         { error: 'Failed to send WhatsApp message', details: whatsappData, status: whatsappResponse.status },
@@ -96,13 +115,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the sent message
-    const messageId = whatsappData.messages[0]?.id || 'unknown'
+    const messageId = whatsappData.messages?.[0]?.id || 'unknown'
 
     await supabase.from('whatsapp_messages').insert([
       {
         lead_id: lead.id,
         direction: 'sent',
-        message_text: message,
+        message_text: `Template: 45movers_first_touch_wa - ${first_name}, ${pickupSuburb}, ${moveDate}`,
         message_id: messageId
       }
     ])
