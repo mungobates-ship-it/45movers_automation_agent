@@ -82,9 +82,16 @@ export async function POST(request: NextRequest) {
     const whatsappData = await whatsappResponse.json()
 
     if (!whatsappResponse.ok) {
+      console.error('WhatsApp API error:', {
+        status: whatsappResponse.status,
+        statusText: whatsappResponse.statusText,
+        data: whatsappData,
+        token: process.env.WHATSAPP_ACCESS_TOKEN ? 'SET' : 'MISSING',
+        phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID
+      })
       return NextResponse.json(
-        { error: 'Failed to send WhatsApp message', details: whatsappData },
-        { status: 500 }
+        { error: 'Failed to send WhatsApp message', details: whatsappData, status: whatsappResponse.status },
+        { status: whatsappResponse.status }
       )
     }
 
